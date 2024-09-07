@@ -7,8 +7,8 @@ NEW_MARGIN = "0 !important"
 NEW_PADDING = "0 !important"
 
 def replace_margins_and_padding_in_css(css_content):
-    css_content = re.sub(r'margin(-top|-bottom|-left|-right)?\s*:\s*[0-9.]+(em|px|rem|%|pt)?\s*;', f'margin: {NEW_MARGIN};', css_content)
-    css_content = re.sub(r'padding(-top|-bottom|-left|-right)?\s*:\s*[0-9.]+(em|px|rem|%|pt)?\s*;', f'padding: {NEW_PADDING};', css_content)
+    css_content = re.sub(r'margin(-top|-bottom|-left|-right)?\s*:\s*[0-9.]+\s*[\w%]*\s*;', f'margin: {NEW_MARGIN};', css_content)
+    css_content = re.sub(r'padding(-top|-bottom|-left|-right)?\s*:\s*[0-9.]+\s*[\w%]*\s*;', f'padding: {NEW_PADDING};', css_content)
     return css_content
 
 def process_epub(epub_path, output_folder):
@@ -50,7 +50,7 @@ def main():
     epub_files = [os.path.join(epub_folder, f) for f in os.listdir(epub_folder) if f.endswith('.epub')]
     
     if not epub_files:
-        print("No EPUB files found in the specified directory.")
+        print("No EPUB files found")
         return
     
     for epub_file in epub_files:
