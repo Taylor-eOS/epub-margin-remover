@@ -17,7 +17,7 @@ This is a Python script to process EPUB files by removing or resetting all CSS m
    git clone https://github.com/Taylor-eOS/epub-margins.git
    cd epub-margins
    ```
-2. **Create a Virtual Environment**
+2. **(Optional) Create a Virtual Environment (No dependencies needed)**
    ```bash
    python -m venv epub-margins
    cd epub-margins  #On Windows: epub-margins\Scripts\activate
@@ -29,7 +29,7 @@ This is a Python script to process EPUB files by removing or resetting all CSS m
    Copy all the EPUB files you want to process into the root directory of the script.
 2. **Run the Script**
    ```bash
-   python epub_css_remover.py
+   python epub-margins.py
    ```
 3. **Processed Files**
    The processed EPUB files will be saved in the `processed_epubs` directory.
