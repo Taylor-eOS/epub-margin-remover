@@ -29,13 +29,14 @@ Requirements can be installed via requirements.txt
 
 ## Usage
 1. **Place EPUB Files**
-   Copy all the EPUB files you want to process into the root directory of the script.
+   Copy all the EPUB files you want to process into the folder `input_files`.
 2. **Run the Script**
    ```bash
    python epub-margins.py
    ```
 3. **Processed Files**
-   The processed EPUB files will be saved in the `processed_epubs` directory.
+   The processed EPUB files will be saved in the `processed_epubs` directory and tell you whether the process succeeded.
+   Error messages about inability to add custom fields do not prevent the process, but jsut tell you those fields don't get added.
 
 ## How It Works
 The script performs the following steps for each EPUB file:
