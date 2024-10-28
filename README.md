@@ -20,7 +20,9 @@ Requirements can be installed via requirements.txt
    git clone https://github.com/Taylor-eOS/epub-margins
    cd epub-margins
    ```
-2. **(Optional) Create a Virtual Environment**
+Or just download the `.py` file.
+
+2. **Create a Virtual Environment**
    ```bash
    python -m venv epub-margins
    cd epub-margins
@@ -36,14 +38,14 @@ Requirements can be installed via requirements.txt
    ```
 3. **Processed Files**
    The processed EPUB files will be saved in the `processed_epubs` directory and tell you whether the process succeeded.
-   Error messages about inability to add custom fields do not prevent the process, but jsut tell you those fields don't get added.
+   Error messages about inability to add custom fields do not prevent the process, but just tell you those fields don't get added.
 
 ## How It Works
 The script performs the following steps for each EPUB file:
 
 1. **Extracts the EPUB**: Unzips the EPUB file into a temporary directory.
 2. **Processes CSS Files**: Searches for all `.css` files and replaces margin and padding properties with `0 !important`.
-3. **Repackages the EPUB**: Zips the processed files back into an EPUB format.
+3. **Repackages the EPUB**: Zips the processed files back into an EPUB format. (Hopefully now into a proper format.)
 4. **Cleanup**: Removes the temporary directory used for processing.
 
 ## Customization
