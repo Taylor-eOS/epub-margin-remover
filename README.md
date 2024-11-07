@@ -34,7 +34,7 @@ Or just download the `.py` file.
    Copy all the EPUB files you want to process into the folder `input_files`.
 2. **Run the Script**
    ```bash
-   python epub-margins.py
+   python reduce_all_margins.py
    ```
 3. **Processed Files**
    The processed EPUB files will be saved in the `processed_epubs` directory and tell you whether the process succeeded.
