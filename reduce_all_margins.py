@@ -7,12 +7,17 @@ epub_folder = "./input_files"
 output_folder = "./processed_epubs"
 
 def replace_margins(css_content):
-    css_content = re.sub(r'(margin(?:-(?:top|bottom|left|right))?)\s*:\s*[^;]+;', r'\1: 0 !important;', css_content, flags=re.IGNORECASE)
-    css_content = re.sub(r'(padding(?:-(?:top|bottom|left|right))?)\s*:\s*[^;]+;', r'\1: 0 !important;', css_content, flags=re.IGNORECASE)
-    css_content = re.sub(r'(?:^|\s)margin\s*:\s*[^;]+;', 'margin: 0 !important;', css_content, flags=re.IGNORECASE)
-    css_content = re.sub(r'(?:^|\s)padding\s*:\s*[^;]+;', 'padding: 0 !important;', css_content, flags=re.IGNORECASE)
-    css_content = re.sub(r'!important\s*;?', '!important;', css_content, flags=re.IGNORECASE)
-    return css_content
+    lines = css_content.splitlines()
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if ':' in stripped and stripped.endswith(';'):
+            prop, value = stripped.split(':', 1)
+            lname = prop.strip().lower()
+            if lname.startswith('margin') or lname.startswith('padding'):
+                line = f"{prop.strip()}: 0 !important;"
+        new_lines.append(line)
+    return "\n".join(new_lines)
 
 def replace_style_block(match):
     open_tag = match.group(1)
