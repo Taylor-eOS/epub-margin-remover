@@ -1,105 +1,255 @@
 import os
-import re
 import shutil
 from calibre.ebooks.oeb.polish.container import get_container
+from lxml import etree, html
 
 epub_folder = "./input_files"
 output_folder = "./processed_epubs"
 
-def parse_numeric_value_with_unit(value_str):
-    parts = value_str.split()
-    if not parts:
-        return '0'
-    num_part = parts[0]
-    try:
-        if 'em' in num_part:
-            unit = 'em'
-            number = float(num_part.rstrip('em'))
-        elif 'px' in num_part:
-            unit = 'px'
-            number = float(num_part.rstrip('px'))
-        elif 'pt' in num_part:
-            unit = 'pt'
-            number = float(num_part.rstrip('pt'))
-        elif 'rem' in num_part:
-            unit = 'rem'
-            number = float(num_part.rstrip('rem'))
-        else:
-            unit = ''
-            number = float(num_part)
-        if number < 0:
-            number = 0
-        return str(number) + unit
-    except:
-        return '0'
+HEADER_SELECTORS = {
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    '.h1', '.h2', '.h3', '.h4', '.h5', '.h6',
+    '.chapter-title', '.section-title', '.title', '.ch-title', '.ch-num'
+}
 
-def normalize_property_value(value):
-    val = value.strip()
-    if val.endswith(';'):
-        val = val[:-1].strip()
-    if val.endswith('!important'):
-        val = val[:-10].strip()
-    return val
+QUOTE_SELECTORS = {
+    'blockquote', '.blockquote', '.quote', '.epigraph'
+}
 
-def process_css_property(line_strip):
-    if not line_strip.endswith(';'):
-        line_strip = line_strip + ';'
-    prop, value = line_strip.split(':', 1)
-    lname = prop.strip().lower()
-    if lname.startswith('margin') or lname.startswith('padding'):
-        return f"    {prop.strip()}: 0 !important;"
-    if lname.startswith('text-indent'):
-        val = normalize_property_value(value)
-        new_val = parse_numeric_value_with_unit(val)
-        return f"    {prop.strip()}: {new_val} !important;"
-    return f"    {line_strip}"
+def get_exemption_type(selector):
+    selector_lower = selector.lower().strip()
+    for quote_sel in QUOTE_SELECTORS:
+        if quote_sel in selector_lower:
+            return 'quote'
+    for header_sel in HEADER_SELECTORS:
+        if header_sel in selector_lower:
+            return 'header'
+    return None
 
-def process_css_block(block):
-    new_block_lines = []
-    for line in block.splitlines():
-        line_strip = line.strip()
-        if ':' in line_strip:
-            new_block_lines.append(process_css_property(line_strip))
-        elif line_strip:
-            new_block_lines.append(f"    {line_strip}")
-    return new_block_lines
-
-def replace_margins(css_content):
+def strip_css_comments(css_text):
     result = []
     i = 0
-    n = len(css_content)
-    while i < n:
-        start = css_content.find('{', i)
-        if start == -1:
-            result.append(css_content[i:])
-            break
-        end = css_content.find('}', start)
-        if end == -1:
-            end = n - 1
-        selector = css_content[i:start].strip()
-        result.append(f"{selector} {{")
-        block = css_content[start+1:end]
-        new_block_lines = process_css_block(block)
-        result.extend(new_block_lines)
-        result.append('}')
-        i = end + 1
-    return "\n".join(result)
+    while i < len(css_text):
+        if i < len(css_text) - 1 and css_text[i:i+2] == '/*':
+            end = css_text.find('*/', i + 2)
+            if end == -1:
+                break
+            i = end + 2
+        else:
+            result.append(css_text[i])
+            i += 1
+    return ''.join(result)
 
-def replace_style_block(match):
-    open_tag = match.group(1)
-    inner = match.group(2)
-    new_inner = replace_margins(inner)
-    return f"{open_tag}{new_inner}</style>"
+def parse_css_value_unit(value_str):
+    value_str = value_str.strip()
+    if not value_str or value_str == '0':
+        return '0', ''
+    for unit in ['rem', 'em', 'px', 'pt', '%', 'vh', 'vw', 'ch', 'ex']:
+        if value_str.endswith(unit):
+            num_part = value_str[:-len(unit)].strip()
+            try:
+                num_val = float(num_part)
+                return str(num_val), unit
+            except ValueError:
+                return '0', ''
+    try:
+        num_val = float(value_str)
+        return str(num_val), ''
+    except ValueError:
+        return '0', ''
 
-def replace_style_attr_double(match):
-    inner = match.group(1)
-    new_inner = replace_margins(inner)
-    return f'style="{new_inner}"'
+def normalize_text_indent(value):
+    value = value.strip()
+    if value.endswith('!important'):
+        value = value[:-10].strip()
+    value_lower = value.lower()
+    if 'calc(' in value_lower or 'var(' in value_lower:
+        return value
+    num, unit = parse_css_value_unit(value)
+    try:
+        num_float = float(num)
+        if num_float < 0:
+            return '0'
+        return num + unit
+    except ValueError:
+        return '0'
 
-def replace_style_attr_single(match):
-    inner = match.group(1)
-    new_inner = replace_margins(inner)
-    return f"style='{new_inner}'"
+def tokenize_css(css_text):
+    css_text = strip_css_comments(css_text)
+    tokens = []
+    current = []
+    in_string = None
+    i = 0
+    while i < len(css_text):
+        char = css_text[i]
+        if in_string:
+            current.append(char)
+            if char == in_string and (i == 0 or css_text[i-1] != '\\'):
+                in_string = None
+            i += 1
+            continue
+        if char in ('"', "'"):
+            in_string = char
+            current.append(char)
+            i += 1
+            continue
+        if char in ('{', '}', ';'):
+            if current:
+                tokens.append(('text', ''.join(current).strip()))
+                current = []
+            tokens.append((char, char))
+            i += 1
+            continue
+        current.append(char)
+        i += 1
+    if current:
+        text = ''.join(current).strip()
+        if text:
+            tokens.append(('text', text))
+    return tokens
+
+def parse_css_rules(tokens):
+    rules = []
+    i = 0
+    while i < len(tokens):
+        if tokens[i][0] == 'text':
+            selector_parts = []
+            while i < len(tokens) and tokens[i][0] == 'text':
+                selector_parts.append(tokens[i][1])
+                i += 1
+            selector = ' '.join(selector_parts)
+            if i < len(tokens) and tokens[i][0] == '{':
+                i += 1
+                declarations = []
+                while i < len(tokens) and tokens[i][0] != '}':
+                    if tokens[i][0] == 'text' and tokens[i][1].strip():
+                        declarations.append(tokens[i][1])
+                    elif tokens[i][0] == ';':
+                        pass
+                    i += 1
+                if i < len(tokens) and tokens[i][0] == '}':
+                    i += 1
+                rules.append({
+                    'selector': selector,
+                    'declarations': declarations,
+                    'type': 'rule'
+                })
+            else:
+                i += 1
+        else:
+            i += 1
+    return rules
+
+def process_declaration(decl, exempt_type):
+    if ':' not in decl:
+        return decl
+    prop, value = decl.split(':', 1)
+    prop = prop.strip()
+    value = value.strip()
+    if value.endswith(';'):
+        value = value[:-1].strip()
+    prop_lower = prop.lower()
+    if prop_lower in ('margin', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right',
+                      'padding', 'padding-top', 'padding-bottom', 'padding-left', 'padding-right'):
+        if exempt_type == 'quote':
+            return f"{prop}: {value}"
+        elif exempt_type == 'header' and prop_lower == 'margin-top':
+            return f"{prop}: {value}"
+        else:
+            return f"{prop}: 0 !important"
+    if prop_lower == 'text-indent':
+        if exempt_type == 'quote':
+            return f"{prop}: {value}"
+        new_value = normalize_text_indent(value)
+        return f"{prop}: {new_value} !important"
+    return f"{prop}: {value}"
+
+def process_css_rules_list(rules):
+    output = []
+    for rule in rules:
+        if rule['type'] == 'rule':
+            selector = rule['selector']
+            exempt_type = get_exemption_type(selector)
+            output.append(f"{selector} {{")
+            for decl in rule['declarations']:
+                processed = process_declaration(decl, exempt_type)
+                output.append(f"    {processed};")
+            output.append("}")
+    return '\n'.join(output)
+
+def replace_margins_in_css(css_content):
+    tokens = tokenize_css(css_content)
+    rules = parse_css_rules(tokens)
+    return process_css_rules_list(rules)
+
+def process_style_element(style_elem):
+    if style_elem.text:
+        original = style_elem.text
+        processed = replace_margins_in_css(original)
+        style_elem.text = processed
+        return original != processed
+    return False
+
+def process_style_attribute(elem):
+    style_attr = elem.get('style')
+    if not style_attr:
+        return False
+    original = style_attr
+    tag_name = elem.tag.lower() if isinstance(elem.tag, str) else ''
+    if '}' in tag_name:
+        tag_name = tag_name.split('}')[-1]
+    exempt_type = None
+    if tag_name == 'blockquote':
+        exempt_type = 'quote'
+    elif tag_name in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+        exempt_type = 'header'
+    else:
+        elem_class = elem.get('class', '')
+        for quote_sel in QUOTE_SELECTORS:
+            if quote_sel.startswith('.') and quote_sel[1:] in elem_class.lower():
+                exempt_type = 'quote'
+                break
+        if not exempt_type:
+            for header_sel in HEADER_SELECTORS:
+                if header_sel.startswith('.') and header_sel[1:] in elem_class.lower():
+                    exempt_type = 'header'
+                    break
+    declarations = [d.strip() for d in style_attr.split(';') if d.strip()]
+    processed_decls = []
+    for decl in declarations:
+        processed = process_declaration(decl, exempt_type)
+        processed_decls.append(processed)
+    new_style = '; '.join(processed_decls)
+    elem.set('style', new_style)
+    return original != new_style
+
+def process_html_content(html_content):
+    try:
+        tree = html.fromstring(html_content)
+    except:
+        try:
+            parser = etree.XMLParser(recover=True)
+            tree = etree.fromstring(html_content.encode('utf-8'), parser)
+        except:
+            return html_content, False
+    modified = False
+    for style_elem in tree.xpath('//style'):
+        if process_style_element(style_elem):
+            modified = True
+    for elem in tree.xpath('//*[@style]'):
+        if process_style_attribute(elem):
+            modified = True
+    if modified:
+        try:
+            result = html.tostring(tree, encoding='unicode', method='html')
+            return result, True
+        except:
+            try:
+                result = etree.tostring(tree, encoding='unicode', method='xml')
+                return result, True
+            except:
+                return html_content, False
+    return html_content, False
 
 def process_epub(input_path, output_path):
     shutil.copy(input_path, output_path)
@@ -112,17 +262,15 @@ def process_epub(input_path, output_path):
                 modified = True
             elif mt == "text/css":
                 css_text = container.raw_data(name, decode=True)
-                new_css_text = replace_margins(css_text)
+                new_css_text = replace_margins_in_css(css_text)
                 if new_css_text != css_text:
                     container.replace(name, new_css_text)
                     modified = True
             elif mt in ("application/xhtml+xml", "text/html"):
-                txt = container.raw_data(name, decode=True)
-                new_txt = re.sub(r'(<style\b[^>]*>)(.*?)</style>', replace_style_block, txt, flags=re.IGNORECASE | re.DOTALL)
-                new_txt = re.sub(r'style\s*=\s*"([^"]*?)"', replace_style_attr_double, new_txt, flags=re.IGNORECASE | re.DOTALL)
-                new_txt = re.sub(r"style\s*=\s*'([^']*?)'", replace_style_attr_single, new_txt, flags=re.IGNORECASE | re.DOTALL)
-                if new_txt != txt:
-                    container.replace(name, new_txt)
+                html_content = container.raw_data(name, decode=True)
+                new_content, content_modified = process_html_content(html_content)
+                if content_modified:
+                    container.replace(name, new_content)
                     modified = True
         if modified:
             container.commit()
@@ -152,4 +300,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
