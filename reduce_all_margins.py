@@ -1,26 +1,64 @@
 import os
+import re
 import shutil
 from calibre.ebooks.oeb.polish.container import get_container
 
 epub_folder = "./input_files"
 output_folder = "./processed_epubs"
 
+def replace_margins(css_content):
+    css_content = re.sub(r'(margin(?:-(?:top|bottom|left|right))?)\s*:\s*[^;]+;', r'\1: 0 !important;', css_content, flags=re.IGNORECASE)
+    css_content = re.sub(r'(padding(?:-(?:top|bottom|left|right))?)\s*:\s*[^;]+;', r'\1: 0 !important;', css_content, flags=re.IGNORECASE)
+    css_content = re.sub(r'(?:^|\s)margin\s*:\s*[^;]+;', 'margin: 0 !important;', css_content, flags=re.IGNORECASE)
+    css_content = re.sub(r'(?:^|\s)padding\s*:\s*[^;]+;', 'padding: 0 !important;', css_content, flags=re.IGNORECASE)
+    css_content = re.sub(r'!important\s*;?', '!important;', css_content, flags=re.IGNORECASE)
+    return css_content
+
+def replace_style_block(match):
+    open_tag = match.group(1)
+    inner = match.group(2)
+    new_inner = replace_margins(inner)
+    return f"{open_tag}{new_inner}</style>"
+
+def replace_style_attr_double(match):
+    inner = match.group(1)
+    new_inner = replace_margins(inner)
+    return f'style="{new_inner}"'
+
+def replace_style_attr_single(match):
+    inner = match.group(1)
+    new_inner = replace_margins(inner)
+    return f"style='{new_inner}'"
+
 def process_epub(input_path, output_path):
     shutil.copy(input_path, output_path)
     try:
         container = get_container(output_path)
         modified = False
-        for name in container.manifest_items_of_type("text/css"):
-            css_text = container.raw_data(name, decode=True)
-            new_rule = "\nbody {\n    margin: 0;\n    padding: 0;\n}\n"
-            if new_rule not in css_text:
-                new_css_text = css_text + new_rule
-                container.replace(name, new_css_text)
+        for name, mt in list(container.mime_map.items()):
+            if mt == "application/vnd.adobe-page-template+xml":
+                container.remove_item(name)
                 modified = True
+            elif mt == "text/css":
+                css_text = container.raw_data(name, decode=True)
+                new_css_text = replace_margins(css_text)
+                if new_css_text != css_text:
+                    container.replace(name, new_css_text)
+                    modified = True
+            elif mt in ("application/xhtml+xml", "text/html"):
+                txt = container.raw_data(name, decode=True)
+                new_txt = re.sub(r'(<style\b[^>]*>)(.*?)</style>', replace_style_block, txt, flags=re.IGNORECASE | re.DOTALL)
+                new_txt = re.sub(r'style\s*=\s*"([^"]*?)"', replace_style_attr_double, new_txt, flags=re.IGNORECASE | re.DOTALL)
+                new_txt = re.sub(r"style\s*=\s*'([^']*?)'", replace_style_attr_single, new_txt, flags=re.IGNORECASE | re.DOTALL)
+                if new_txt != txt:
+                    container.replace(name, new_txt)
+                    modified = True
         if modified:
+            container.commit()
             print(f"Processed and saved: {output_path}")
         else:
-            print(f"No changes needed in CSS for: {output_path}")
+            print(f"No CSS changes needed in: {output_path}")
+            os.remove(output_path)
     except Exception as e:
         print(f"Failed to process {output_path}: {e}")
         if os.path.exists(output_path):
@@ -43,3 +81,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
