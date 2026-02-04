@@ -7,17 +7,52 @@ epub_folder = "./input_files"
 output_folder = "./processed_epubs"
 
 def replace_margins(css_content):
-    lines = css_content.splitlines()
-    new_lines = []
-    for line in lines:
-        stripped = line.strip()
-        if ':' in stripped and stripped.endswith(';'):
-            prop, value = stripped.split(':', 1)
-            lname = prop.strip().lower()
-            if lname.startswith('margin') or lname.startswith('padding'):
-                line = f"{prop.strip()}: 0 !important;"
-        new_lines.append(line)
-    return "\n".join(new_lines)
+    result = []
+    i = 0
+    n = len(css_content)
+    while i < n:
+        start = css_content.find('{', i)
+        if start == -1:
+            result.append(css_content[i:])
+            break
+        end = css_content.find('}', start)
+        if end == -1:
+            end = n - 1
+        selector = css_content[i:start].strip()
+        result.append(f"{selector} {{")
+        block = css_content[start+1:end]
+        new_block_lines = []
+        for line in block.splitlines():
+            line_strip = line.strip()
+            if ':' in line_strip:
+                semicolon = ';' if line_strip.endswith(';') else ''
+                prop, value = line_strip.split(':', 1)
+                lname = prop.strip().lower()
+                if lname.startswith('margin') or lname.startswith('padding'):
+                    new_block_lines.append(f"    {prop.strip()}: 0 !important{semicolon}")
+                    continue
+                if lname.startswith('text-indent'):
+                    try:
+                        val = value.strip().lower()
+                        # extract numeric part
+                        m = re.match(r'([-+]?[0-9]*\.?[0-9]+)', val)
+                        if m:
+                            number = float(m.group(1))
+                            if number < 0:
+                                number = 0
+                            new_val = str(number) + val[m.end():]
+                        else:
+                            new_val = '0'
+                    except:
+                        new_val = '0'
+                    new_block_lines.append(f"    {prop.strip()}: {new_val} !important{semicolon}")
+                    continue
+            if line_strip:
+                new_block_lines.append(f"    {line_strip}")
+        result.extend(new_block_lines)
+        result.append('}')
+        i = end + 1
+    return "\n".join(result)
 
 def replace_style_block(match):
     open_tag = match.group(1)
