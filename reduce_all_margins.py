@@ -6,6 +6,64 @@ from calibre.ebooks.oeb.polish.container import get_container
 epub_folder = "./input_files"
 output_folder = "./processed_epubs"
 
+def parse_numeric_value_with_unit(value_str):
+    parts = value_str.split()
+    if not parts:
+        return '0'
+    num_part = parts[0]
+    try:
+        if 'em' in num_part:
+            unit = 'em'
+            number = float(num_part.rstrip('em'))
+        elif 'px' in num_part:
+            unit = 'px'
+            number = float(num_part.rstrip('px'))
+        elif 'pt' in num_part:
+            unit = 'pt'
+            number = float(num_part.rstrip('pt'))
+        elif 'rem' in num_part:
+            unit = 'rem'
+            number = float(num_part.rstrip('rem'))
+        else:
+            unit = ''
+            number = float(num_part)
+        if number < 0:
+            number = 0
+        return str(number) + unit
+    except:
+        return '0'
+
+def normalize_property_value(value):
+    val = value.strip()
+    if val.endswith(';'):
+        val = val[:-1].strip()
+    if val.endswith('!important'):
+        val = val[:-10].strip()
+    return val
+
+def process_css_property(line_strip):
+    if not line_strip.endswith(';'):
+        line_strip = line_strip + ';'
+    prop, value = line_strip.split(':', 1)
+    lname = prop.strip().lower()
+    if lname.startswith('margin') or lname.startswith('padding'):
+        return f"    {prop.strip()}: 0 !important;"
+    if lname.startswith('text-indent'):
+        val = normalize_property_value(value)
+        new_val = parse_numeric_value_with_unit(val)
+        return f"    {prop.strip()}: {new_val} !important;"
+    return f"    {line_strip}"
+
+def process_css_block(block):
+    new_block_lines = []
+    for line in block.splitlines():
+        line_strip = line.strip()
+        if ':' in line_strip:
+            new_block_lines.append(process_css_property(line_strip))
+        elif line_strip:
+            new_block_lines.append(f"    {line_strip}")
+    return new_block_lines
+
 def replace_margins(css_content):
     result = []
     i = 0
@@ -21,49 +79,7 @@ def replace_margins(css_content):
         selector = css_content[i:start].strip()
         result.append(f"{selector} {{")
         block = css_content[start+1:end]
-        new_block_lines = []
-        for line in block.splitlines():
-            line_strip = line.strip()
-            if ':' in line_strip:
-                if not line_strip.endswith(';'):
-                    line_strip = line_strip + ';'
-                prop, value = line_strip.split(':', 1)
-                lname = prop.strip().lower()
-                if lname.startswith('margin') or lname.startswith('padding'):
-                    new_block_lines.append(f"    {prop.strip()}: 0 !important;")
-                    continue
-                if lname.startswith('text-indent'):
-                    val = value.strip()
-                    if val.endswith(';'):
-                        val = val[:-1].strip()
-                    if val.endswith('!important'):
-                        val = val[:-10].strip()
-                    parts = val.split()
-                    if parts:
-                        num_part = parts[0]
-                        try:
-                            number = float(num_part.rstrip('em').rstrip('px').rstrip('pt').rstrip('rem'))
-                            if number < 0:
-                                number = 0
-                            if 'em' in num_part:
-                                unit = 'em'
-                            elif 'px' in num_part:
-                                unit = 'px'
-                            elif 'pt' in num_part:
-                                unit = 'pt'
-                            elif 'rem' in num_part:
-                                unit = 'rem'
-                            else:
-                                unit = ''
-                            new_val = str(number) + unit
-                        except:
-                            new_val = '0'
-                    else:
-                        new_val = '0'
-                    new_block_lines.append(f"    {prop.strip()}: {new_val} !important;")
-                    continue
-            if line_strip:
-                new_block_lines.append(f"    {line_strip}")
+        new_block_lines = process_css_block(block)
         result.extend(new_block_lines)
         result.append('}')
         i = end + 1
