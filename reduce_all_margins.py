@@ -25,27 +25,42 @@ def replace_margins(css_content):
         for line in block.splitlines():
             line_strip = line.strip()
             if ':' in line_strip:
-                semicolon = ';' if line_strip.endswith(';') else ''
+                if not line_strip.endswith(';'):
+                    line_strip = line_strip + ';'
                 prop, value = line_strip.split(':', 1)
                 lname = prop.strip().lower()
                 if lname.startswith('margin') or lname.startswith('padding'):
-                    new_block_lines.append(f"    {prop.strip()}: 0 !important{semicolon}")
+                    new_block_lines.append(f"    {prop.strip()}: 0 !important;")
                     continue
                 if lname.startswith('text-indent'):
-                    try:
-                        val = value.strip().lower()
-                        # extract numeric part
-                        m = re.match(r'([-+]?[0-9]*\.?[0-9]+)', val)
-                        if m:
-                            number = float(m.group(1))
+                    val = value.strip()
+                    if val.endswith(';'):
+                        val = val[:-1].strip()
+                    if val.endswith('!important'):
+                        val = val[:-10].strip()
+                    parts = val.split()
+                    if parts:
+                        num_part = parts[0]
+                        try:
+                            number = float(num_part.rstrip('em').rstrip('px').rstrip('pt').rstrip('rem'))
                             if number < 0:
                                 number = 0
-                            new_val = str(number) + val[m.end():]
-                        else:
+                            if 'em' in num_part:
+                                unit = 'em'
+                            elif 'px' in num_part:
+                                unit = 'px'
+                            elif 'pt' in num_part:
+                                unit = 'pt'
+                            elif 'rem' in num_part:
+                                unit = 'rem'
+                            else:
+                                unit = ''
+                            new_val = str(number) + unit
+                        except:
                             new_val = '0'
-                    except:
+                    else:
                         new_val = '0'
-                    new_block_lines.append(f"    {prop.strip()}: {new_val} !important{semicolon}")
+                    new_block_lines.append(f"    {prop.strip()}: {new_val} !important;")
                     continue
             if line_strip:
                 new_block_lines.append(f"    {line_strip}")
