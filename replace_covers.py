@@ -96,15 +96,21 @@ def process_epub(epub_path, output_path, replacement_path):
     with zipfile.ZipFile(epub_path, 'r') as z:
         opf_path = find_opf_path(z)
         if opf_path is None:
-            print(f"No OPF found in {epub_path.name}, copied original")
+            print(f"No OPF found in {epub_path.name}, skipping")
+            if output_path.exists():
+                output_path.unlink()
             return
         manifest, opf_dir, root, ns = parse_opf(z, opf_path)
         cover_zip_path, cover_media = find_cover_path(z, manifest, opf_dir, root, ns)
         if cover_zip_path is None:
-            print(f"No cover detected in {epub_path.name}, copied original")
+            print(f"No cover detected in {epub_path.name}, skipping")
+            if output_path.exists():
+                output_path.unlink()
             return
         if not replacement_path.exists():
-            print(f"No replacement image for {epub_path.name}, copied original")
+            print(f"No replacement image for {epub_path.name}, skipping")
+            if output_path.exists():
+                output_path.unlink()
             return
         try:
             img = Image.open(replacement_path)
@@ -131,7 +137,9 @@ def process_epub(epub_path, output_path, replacement_path):
             img.save(bytes_io, format=fmt, **save_kwargs)
             new_cover_data = bytes_io.getvalue()
         except Exception as e:
-            print(f"Failed to process replacement image for {epub_path.name}: {e}, copied original")
+            print(f"Failed to process replacement image for {epub_path.name}: {e}, skipping")
+            if output_path.exists():
+                output_path.unlink()
             return
         tmp_path = output_path.with_suffix('.tmp')
         try:
@@ -145,9 +153,11 @@ def process_epub(epub_path, output_path, replacement_path):
             shutil.move(tmp_path, output_path)
             print(f"Replaced cover in {output_path.name}")
         except Exception as e:
-            print(f"Failed to write modified EPUB for {epub_path.name}: {e}")
+            print(f"Failed to write modified EPUB for {epub_path.name}: {e}, skipping")
             if tmp_path.exists():
                 tmp_path.unlink()
+            if output_path.exists():
+                output_path.unlink()
 
 def main():
     p = Path(epub_folder).expanduser().resolve()
@@ -169,13 +179,12 @@ def main():
     for epub_path in epub_paths:
         replacement_path = c / (epub_path.stem + '.jpg')
         output_path = out_p / epub_path.name
-        if replacement_path.exists():
-            process_epub(epub_path, output_path, replacement_path)
-            success_count += 1
-        else:
-            shutil.copy(epub_path, output_path)
-            print(f"No replacement for {epub_path.name}, copied original")
+        if not replacement_path.exists():
+            print(f"No replacement image found for {epub_path.name}, skipping")
             skip_count += 1
-    print(f"\nProcessed {len(epub_paths)} files: {success_count} covers replaced, {skip_count} copied unchanged")
+            continue
+        process_epub(epub_path, output_path, replacement_path)
+        success_count += 1
+    print(f"\nProcessed {len(epub_paths)} files: {success_count} covers replaced, {skip_count} skipped")
 
 main()
