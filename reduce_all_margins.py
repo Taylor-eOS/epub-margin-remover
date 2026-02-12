@@ -3,18 +3,13 @@ import shutil
 from calibre.ebooks.oeb.polish.container import get_container
 from lxml import etree, html
 
-epub_folder = "./input_files"
-output_folder = "./processed_epubs"
-
+epub_folder = "input_files"
+output_folder = "output_files"
 HEADER_SELECTORS = {
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    '.h1', '.h2', '.h3', '.h4', '.h5', '.h6',
-    '.chapter-title', '.section-title', '.title', '.ch-title', '.ch-num'
-}
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', '.h1', '.h2', '.h3', '.h4', '.h5', '.h6',
+    '.chapter-title', '.section-title', '.title', '.ch-title', '.ch-num'}
 
-QUOTE_SELECTORS = {
-    'blockquote', '.blockquote', '.quote', '.epigraph'
-}
+QUOTE_SELECTORS = {'blockquote', '.blockquote', '.quote', '.epigraph'}
 
 def get_exemption_type(selector):
     selector_lower = selector.lower().strip()
@@ -284,6 +279,7 @@ def process_epub(input_path, output_path):
             os.remove(output_path)
 
 def main():
+    print('Run as: calibre-debug reduce_all_margins.py')
     os.makedirs(output_folder, exist_ok=True)
     try:
         epub_files = [os.path.join(epub_folder, f) for f in os.listdir(epub_folder) if f.lower().endswith(".epub")]
@@ -300,3 +296,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -1,8 +1,8 @@
+import os
+import sys
 from calibre.ebooks.oeb.polish.container import get_container
 from lxml import etree
 import shutil
-import sys
-import os
 
 epub_folder = input('Folder with EPUB files: ')
 covers_folder = epub_folder + '_covers'
@@ -70,6 +70,7 @@ def process_epub(epub_path, output_path, replacement_path):
             os.remove(output_path)
 
 def main():
+    print('Run as: calibre-debug replace_covers.py')
     if not os.path.isdir(epub_folder):
         print(f"EPUB folder not found: {epub_folder}")
         sys.exit(1)
