@@ -5,8 +5,8 @@ import sys
 import os
 
 epub_folder = input('Folder with EPUB files: ')
-covers_folder = input('Folder with cover files: ')
-output_folder = epub_folder + 'new_covers'
+covers_folder = epub_folder + '_covers'
+output_folder = epub_folder + '_new_covers'
 
 def find_cover_image_name(container):
     opf = container.opf
