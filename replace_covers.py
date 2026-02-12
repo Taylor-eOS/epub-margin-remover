@@ -1,12 +1,12 @@
-import os
-import sys
 from calibre.ebooks.oeb.polish.container import get_container
 from lxml import etree
 import shutil
+import sys
+import os
 
 epub_folder = input('Folder with EPUB files: ')
-covers_folder = epub_folder + '_covers'
-output_folder = epub_folder + '_new_covers'
+covers_folder = input('Folder with cover files: ')
+output_folder = epub_folder + 'new_covers'
 
 def find_cover_image_name(container):
     opf = container.opf
@@ -35,16 +35,6 @@ def find_cover_image_name(container):
                 return name
     return None
 
-def get_image_mime_type(file_path):
-    ext = os.path.splitext(file_path)[1].lower()
-    mime_map = {
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.png': 'image/png',
-        '.gif': 'image/gif'
-    }
-    return mime_map.get(ext, 'image/jpeg')
-
 def process_epub(epub_path, output_path, replacement_path):
     shutil.copy(epub_path, output_path)
     try:
@@ -57,11 +47,7 @@ def process_epub(epub_path, output_path, replacement_path):
             return
         with open(replacement_path, 'rb') as f:
             new_cover_data = f.read()
-        new_mime = get_image_mime_type(replacement_path)
         container.replace(cover_name, new_cover_data)
-        old_mime = container.mime_map.get(cover_name)
-        if old_mime != new_mime:
-            container.mime_map[cover_name] = new_mime
         container.commit()
         print(f"Replaced cover in {os.path.basename(output_path)}")
     except Exception as e:
@@ -70,7 +56,6 @@ def process_epub(epub_path, output_path, replacement_path):
             os.remove(output_path)
 
 def main():
-    print('Run as: calibre-debug replace_covers.py')
     if not os.path.isdir(epub_folder):
         print(f"EPUB folder not found: {epub_folder}")
         sys.exit(1)
