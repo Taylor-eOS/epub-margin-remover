@@ -1,10 +1,10 @@
+import os
+import sys
 from calibre.ebooks.oeb.polish.container import get_container
 from lxml import etree
 import shutil
-import sys
-import os
 
-epub_folder = input('Folder with EPUB files: ')
+epub_folder = input('Folder with EPUB files: ').rstrip("/")
 covers_folder = epub_folder + '_covers'
 output_folder = epub_folder + '_new_covers'
 
@@ -90,3 +90,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
